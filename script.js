@@ -58,20 +58,28 @@ document.addEventListener('DOMContentLoaded', () => {
         player.style.left = `${newLeft}px`;
     }
 
-    document.addEventListener('mousemove', (e) => movePlayer(e.clientX));
+    document.addEventListener('mousemove', (e) => {
+        movePlayer(e.clientX);
+        // On desktop, we can assume shooting is tied to keyboard spacebar
+    });
     document.addEventListener('touchmove', (e) => {
+        e.preventDefault(); // prevent screen scrolling
         movePlayer(e.touches[0].clientX);
         isShooting = true;
     });
     document.addEventListener('touchstart', (e) => {
+        e.preventDefault();
         movePlayer(e.touches[0].clientX);
         isShooting = true;
     });
-    document.addEventListener('touchend', () => isShooting = false);
+    document.addEventListener('touchend', () => {
+        isShooting = false;
+    });
 
     document.addEventListener('keydown', (e) => {
         movementKeys[e.key] = true;
         if (e.key === ' ') {
+            e.preventDefault();
             isShooting = true;
         }
     });
@@ -79,14 +87,16 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('keyup', (e) => {
         movementKeys[e.key] = false;
         if (e.key === ' ') {
+            e.preventDefault();
             isShooting = false;
         }
     });
 
     function handleKeyboardMovement() {
+        if (isGameOver) return;
         const playerRect = player.getBoundingClientRect();
         const gameAreaRect = gameArea.getBoundingClientRect();
-        let currentLeft = parseFloat(player.style.left) || (gameAreaRect.width / 2);
+        let currentLeft = parseFloat(player.style.left) || (gameAreaRect.width / 2 - playerRect.width / 2);
 
         if (movementKeys['ArrowLeft'] && currentLeft > 0) {
             currentLeft -= 10;
@@ -102,13 +112,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const playerRect = player.getBoundingClientRect();
         const gameAreaRect = gameArea.getBoundingClientRect();
-        const spread = 5;
+        const spread = 15; // Increased spread for better visuals
 
         for (let i = 0; i < projectiles; i++) {
             const projectile = document.createElement('div');
             projectile.className = 'projectile';
             projectile.textContent = '⚡';
-            const baseLeft = playerRect.left - gameAreaRect.left + playerRect.width / 2 - 5;
+            const baseLeft = playerRect.left - gameAreaRect.left + playerRect.width / 2 - 10;
+            // Calculate offset from the center
             const offset = (i - (projectiles - 1) / 2) * spread;
             projectile.style.left = `${baseLeft + offset}px`;
             projectile.style.top = `${playerRect.top - gameAreaRect.top}px`;
@@ -154,8 +165,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const enemy = document.createElement('div');
         enemy.className = 'enemy';
         enemy.textContent = '🎁';
-        enemy.style.left = `${Math.random() * (gameArea.clientWidth - 30)}px`;
-        enemy.style.top = '-30px';
+        enemy.style.left = `${Math.random() * (gameArea.clientWidth - 40)}px`;
+        enemy.style.top = '-40px';
         gameArea.appendChild(enemy);
     }
 
@@ -173,26 +184,38 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!document.querySelector('.pretzel')) {
                  createPretzel();
             }
+            // After one round of letters, restart the interval for the next round
+            clearInterval(letterInterval);
+            for(let i = 0; i < collectedLetters.length; i++){
+                if(phrase[i] !== ' ') collectedLetters[i] = false;
+            }
+            letterInterval = setInterval(createLetter, 30000);
             return;
         }
 
         const letterIndex = uncollectedIndexes[0];
         const letter = document.createElement('div');
-        letter.className = 'dropped-item letter';
+        letter.className = 'dropped-item';
         letter.textContent = phrase[letterIndex];
+        // *** FIX: Added dataset.type and dataset.index ***
+        letter.dataset.type = 'letter';
         letter.dataset.index = letterIndex;
         letter.style.left = `${Math.random() * (gameArea.clientWidth - 20)}px`;
         letter.style.top = '-30px';
+        letter.style.fontSize = '1.5em'; // Make letters visible
+        letter.style.color = '#FFD700'; // Make letters stand out
         gameArea.appendChild(letter);
     }
     
     function createPretzel() {
-        if (isGameOver) return;
+        if (isGameOver || document.querySelector('[data-type="pretzel"]')) return;
         const pretzel = document.createElement('div');
-        pretzel.className = 'dropped-item pretzel';
+        pretzel.className = 'dropped-item';
         pretzel.textContent = '🥨';
-        pretzel.style.left = `${Math.random() * (gameArea.clientWidth - 20)}px`;
-        pretzel.style.top = '-30px';
+        pretzel.dataset.type = 'pretzel';
+        pretzel.style.left = `${Math.random() * (gameArea.clientWidth - 30)}px`;
+        pretzel.style.top = '-40px';
+        pretzel.style.fontSize = '2em';
         gameArea.appendChild(pretzel);
     }
 
@@ -206,6 +229,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!isInvincible) {
                     playerHit();
                 }
+                createExplosion(enemy.getBoundingClientRect());
                 enemy.remove();
             }
         });
@@ -213,6 +237,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Projectile vs Enemy
         document.querySelectorAll('.projectile').forEach(projectile => {
             document.querySelectorAll('.enemy').forEach(enemy => {
+                if (!projectile.parentElement || !enemy.parentElement) return; // Already removed
                 if (isColliding(projectile.getBoundingClientRect(), enemy.getBoundingClientRect())) {
                     projectile.remove();
                     enemy.remove();
@@ -242,54 +267,57 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function playerHit() {
         lives--;
-        createExplosion(player.getBoundingClientRect());
+        updateUI(); // Update hearts immediately
         if (lives <= 0) {
             gameOver();
-        } else {
-            isInvincible = true;
-            player.classList.add('flicker');
-            setTimeout(() => {
-                isInvincible = false;
-                player.classList.remove('flicker');
-            }, 2000);
+            return;
         }
-        updateUI();
+        
+        createExplosion(player.getBoundingClientRect());
+        isInvincible = true;
+        player.classList.add('flicker');
+        setTimeout(() => {
+            isInvincible = false;
+            player.classList.remove('flicker');
+        }, 2000);
     }
 
     function createExplosion(rect) {
         const explosion = document.createElement('div');
         explosion.className = 'explosion';
         explosion.textContent = '💥';
-        explosion.style.left = `${rect.left + rect.width / 2 - 30}px`;
-        explosion.style.top = `${rect.top + rect.height / 2 - 30}px`;
+        // Position explosion relative to gameArea
+        const gameAreaRect = gameArea.getBoundingClientRect();
+        explosion.style.left = `${rect.left - gameAreaRect.left}px`;
+        explosion.style.top = `${rect.top - gameAreaRect.top}px`;
         gameArea.appendChild(explosion);
         setTimeout(() => explosion.remove(), 500);
     }
 
     function dropItem(rect) {
-        const chance = Math.random();
-        let item;
+        const chance = Math.random() * 100;
+        let item = {};
         let emojiSet;
 
-        if (chance < 0.10) { // +5 points, +1 life
+        if (chance < 1) { // 1%
             emojiSet = ['🍕', '🥯', '🍰', '🎂', '🧁', '🍭', '🍬', '🍩', '🍨', '🍉'];
             item = { type: 'life', emoji: emojiSet[Math.floor(Math.random() * emojiSet.length)] };
-        } else if (chance < 0.25) { // +15 points
+        } else if (chance < 25) { // 15%
             emojiSet = ['😊', '😁', '👍', '🤣', '👌', '🤩', '😝', '😹', '😎', '🐣'];
             item = { type: 'points', emoji: emojiSet[Math.floor(Math.random() * emojiSet.length)] };
-        } else if (chance < 0.40) { // +5 points, slow enemies
+        } else if (chance < 40) { // 15%
             emojiSet = ['⭐', '🌞', '🌜', '❄️', '⛄', '⚡', '🌧️', '☄️', '🌡️', '⛱️'];
             item = { type: 'slow', emoji: emojiSet[Math.floor(Math.random() * emojiSet.length)] };
-        } else if (chance < 0.50) { // +5 points, x3 score
-            emojiSet = ['✨', '🎉', '🪄', '🪅', '🕹️', '🪅', '🪁', '🎢', '🎈', '🪂'];
+        } else if (chance < 50) { // 10%
+            emojiSet = ['✨', '🎉', '🪄', '🪅', '🕹️', '🪁', '🎢', '🎈', '🪂'];
             item = { type: 'multiplier', emoji: emojiSet[Math.floor(Math.random() * emojiSet.length)] };
-        } else if (chance < 0.65) { // +5 points, more projectiles
+        } else if (chance < 65) { // 15%
             emojiSet = ['🤝', '👋', '👏', '🤲', '💪', '✌️', '🤙', '🤛', '✊', '🙏'];
             item = { type: 'weapon', emoji: emojiSet[Math.floor(Math.random() * emojiSet.length)] };
-        } else if (chance < 0.80) { // +5 points, shield
+        } else if (chance < 80) { // 15%
             emojiSet = ['📿', '🕯️', '🪔', '📗', '🕋', '🕌', '🌜', '☪️', '🤲', '🕊️'];
             item = { type: 'shield', emoji: emojiSet[Math.floor(Math.random() * emojiSet.length)] };
-        } else {
+        } else { // 20%
             return; // No drop
         }
 
@@ -297,35 +325,42 @@ document.addEventListener('DOMContentLoaded', () => {
         dropped.className = 'dropped-item';
         dropped.textContent = item.emoji;
         dropped.dataset.type = item.type;
-        dropped.style.left = `${rect.left}px`;
-        dropped.style.top = `${rect.top}px`;
+        const gameAreaRect = gameArea.getBoundingClientRect();
+        dropped.style.left = `${rect.left - gameAreaRect.left}px`;
+        dropped.style.top = `${rect.top - gameAreaRect.top}px`;
         gameArea.appendChild(dropped);
     }
 
+    // *** FIX: Heavily modified this function for correctness ***
     function applyItemEffect(item) {
         const type = item.dataset.type;
-        score += 5 * scoreMultiplier;
 
         switch (type) {
             case 'life':
+                score += 5 * scoreMultiplier;
                 lives++;
                 break;
             case 'points':
-                score += 10 * scoreMultiplier; // Total +15
+                score += 15 * scoreMultiplier;
                 break;
             case 'slow':
+                score += 5 * scoreMultiplier;
                 const currentSpeed = enemySpeed;
                 enemySpeed = Math.max(1, enemySpeed / 2);
                 setTimeout(() => enemySpeed = currentSpeed, 10000);
                 break;
             case 'multiplier':
+                score += 5 * scoreMultiplier;
                 scoreMultiplier = 3;
                 setTimeout(() => scoreMultiplier = 1, 10000);
                 break;
             case 'weapon':
+                score += 5 * scoreMultiplier;
                 projectiles = Math.min(20, projectiles + 1);
                 break;
             case 'shield':
+                score += 5 * scoreMultiplier;
+                if(document.getElementById('shield')) return; // Don't stack shields
                 isInvincible = true;
                 const shieldDiv = document.createElement('div');
                 shieldDiv.id = 'shield';
@@ -341,6 +376,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     collectedLetters[index] = true;
                     score += 20 * scoreMultiplier;
                 }
+                const allLettersCollected = phrase.split('').every((char, i) => {
+                    return char === ' ' || collectedLetters[i];
+                });
+                if(allLettersCollected) {
+                    createPretzel();
+                }
                 break;
             case 'pretzel':
                 score += 100 * scoreMultiplier;
@@ -353,10 +394,13 @@ document.addEventListener('DOMContentLoaded', () => {
     function gameLoop() {
         if (isGameOver) return;
         handleKeyboardMovement();
-        shoot();
+        // Automatic shooting is handled differently for touch vs keyboard
+        if (isShooting) {
+            shoot();
+        }
         moveElements();
         checkCollisions();
-        updateUI();
+        updateUI(); // Moved from loop to only when state changes
         requestAnimationFrame(gameLoop);
     }
 
@@ -367,6 +411,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!isGameOver) enemySpeed += 0.2;
         }, 5000);
         letterInterval = setInterval(createLetter, 30000);
+        
+        // Auto-fire interval for keyboard
+        setInterval(() => {
+            if (movementKeys[' '] || isShooting) {
+                 shoot();
+            }
+        }, 150); // Fire rate
+
         gameLoop();
     }
 
@@ -376,6 +428,7 @@ document.addEventListener('DOMContentLoaded', () => {
         clearInterval(letterInterval);
         finalScoreDisplay.textContent = score;
         gameOverScreen.style.display = 'block';
+        gameArea.querySelectorAll('*').forEach(el => el.remove());
     }
 
     function gameWin() {
@@ -384,6 +437,7 @@ document.addEventListener('DOMContentLoaded', () => {
         clearInterval(letterInterval);
         winScoreDisplay.textContent = score;
         gameWinScreen.style.display = 'block';
+        gameArea.querySelectorAll('*').forEach(el => el.remove());
     }
 
     startGame();
