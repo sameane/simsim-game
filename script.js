@@ -9,6 +9,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const finalScoreDisplay = document.getElementById('final-score');
     const gameWinScreen = document.getElementById('game-win');
     const winScoreDisplay = document.getElementById('win-score');
+    const backgroundCanvas = document.getElementById('background-canvas');
+    const ctx = backgroundCanvas.getContext('2d');
 
     let score = 0;
     let lives = 5;
@@ -23,8 +25,51 @@ document.addEventListener('DOMContentLoaded', () => {
     let isShooting = false;
     let movementKeys = {};
 
+    let stars = [];
+    const numStars = 200;
+    const starColors = ['#FFFFFF', '#FFD700', '#ADD8E6', '#FF69B4', '#90EE90'];
+
     const phrase = "Happy Birthday to simsim";
     let collectedLetters = Array(phrase.length).fill(false);
+
+    function resizeCanvas() {
+        backgroundCanvas.width = gameArea.clientWidth;
+        backgroundCanvas.height = gameArea.clientHeight;
+    }
+
+    function initStars() {
+        resizeCanvas();
+        stars = [];
+        for (let i = 0; i < numStars; i++) {
+            stars.push({
+                x: Math.random() * backgroundCanvas.width,
+                y: Math.random() * backgroundCanvas.height,
+                size: Math.random() * 2 + 1, // size between 1 and 3
+                speed: Math.random() * 2 + 1, // speed between 1 and 3
+                color: starColors[Math.floor(Math.random() * starColors.length)]
+            });
+        }
+    }
+
+    function drawStars() {
+        ctx.clearRect(0, 0, backgroundCanvas.width, backgroundCanvas.height);
+        stars.forEach(star => {
+            ctx.fillStyle = star.color;
+            ctx.beginPath();
+            ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+            ctx.fill();
+        });
+    }
+
+    function updateStars() {
+        stars.forEach(star => {
+            star.y += star.speed;
+            if (star.y > backgroundCanvas.height) {
+                star.y = 0;
+                star.x = Math.random() * backgroundCanvas.width;
+            }
+        });
+    }
 
     function updateUI() {
         scoreDisplay.textContent = score;
@@ -195,15 +240,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const letterIndex = uncollectedIndexes[0];
         const letter = document.createElement('div');
-        letter.className = 'dropped-item';
+        letter.className = 'dropped-item letter-item';
         letter.textContent = phrase[letterIndex];
-        // *** FIX: Added dataset.type and dataset.index ***
         letter.dataset.type = 'letter';
         letter.dataset.index = letterIndex;
-        letter.style.left = `${Math.random() * (gameArea.clientWidth - 20)}px`;
-        letter.style.top = '-30px';
-        letter.style.fontSize = '1.5em'; // Make letters visible
-        letter.style.color = '#FFD700'; // Make letters stand out
+        letter.style.left = `${Math.random() * (gameArea.clientWidth - 50)}px`;
+        letter.style.top = '-50px';
         gameArea.appendChild(letter);
     }
     
@@ -393,6 +435,8 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function gameLoop() {
         if (isGameOver) return;
+        updateStars();
+        drawStars();
         handleKeyboardMovement();
         // Automatic shooting is handled differently for touch vs keyboard
         if (isShooting) {
@@ -405,13 +449,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function startGame() {
+        initStars();
+        window.addEventListener('resize', initStars); // Re-initialize on resize
         updateUI();
         enemyInterval = setInterval(createEnemy, 1000);
         setInterval(() => {
             if (!isGameOver) enemySpeed += 0.2;
         }, 5000);
         letterInterval = setInterval(createLetter, 30000);
-        
+
         // Auto-fire interval for keyboard
         setInterval(() => {
             if (movementKeys[' '] || isShooting) {
