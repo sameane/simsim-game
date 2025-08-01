@@ -234,7 +234,7 @@ document.addEventListener('DOMContentLoaded', () => {
             for(let i = 0; i < collectedLetters.length; i++){
                 if(phrase[i] !== ' ') collectedLetters[i] = false;
             }
-            letterInterval = setInterval(createLetter, 30000);
+            letterInterval = setInterval(createLetter, 10000);
             return;
         }
 
@@ -438,10 +438,6 @@ document.addEventListener('DOMContentLoaded', () => {
         updateStars();
         drawStars();
         handleKeyboardMovement();
-        // Automatic shooting is handled differently for touch vs keyboard
-        if (isShooting) {
-            shoot();
-        }
         moveElements();
         checkCollisions();
         updateUI(); // Moved from loop to only when state changes
@@ -456,14 +452,14 @@ document.addEventListener('DOMContentLoaded', () => {
         setInterval(() => {
             if (!isGameOver) enemySpeed += 0.2;
         }, 5000);
-        letterInterval = setInterval(createLetter, 30000);
+        letterInterval = setInterval(createLetter, 10000);
 
-        // Auto-fire interval for keyboard
+        // Auto-fire interval
         setInterval(() => {
-            if (movementKeys[' '] || isShooting) {
+            if (isShooting) {
                  shoot();
             }
-        }, 150); // Fire rate
+        }, 300); // Fire rate
 
         gameLoop();
     }
